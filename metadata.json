@@ -1,0 +1,8 @@
+{
+  "name": "EuroVidya Study Abroad",
+  "description": "Analytical study-abroad consultancy portal for Indian students and parents targeting public and state-recognized universities in Germany.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

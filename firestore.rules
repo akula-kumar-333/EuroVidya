@@ -1,0 +1,206 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isNullableNumber(val, minVal, maxVal) {
+      return val == null || (val is number && val >= minVal && val <= maxVal);
+    }
+
+    function isValidDossier(data, userId) {
+      return data.keys().hasAll([
+          'ownerUid',
+          'studentName',
+          'email',
+          'targetDegree',
+          'targetField',
+          'gradingScale',
+          'maxScore',
+          'minPassScore',
+          'obtainedScore',
+          'degreeDuration',
+          'ieltsScore',
+          'germanLevel',
+          'backlogs',
+          'apsStatus',
+          'shortlistedIds',
+          'likedItemIds',
+          'checklistState',
+          'blockedAccount',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid',
+          'studentName',
+          'email',
+          'targetDegree',
+          'targetField',
+          'gradingScale',
+          'maxScore',
+          'minPassScore',
+          'obtainedScore',
+          'degreeDuration',
+          'ieltsScore',
+          'germanLevel',
+          'backlogs',
+          'apsStatus',
+          'shortlistedIds',
+          'likedItemIds',
+          'checklistState',
+          'blockedAccount',
+          'updatedAt'
+        ])
+        && data.ownerUid == userId
+        && data.ownerUid == request.auth.uid
+        && isValidString(data.ownerUid, 1, 128)
+        && isValidString(data.studentName, 0, 120)
+        && isValidString(data.email, 0, 160)
+        && data.targetDegree in ['Bachelors', 'Masters', '']
+        && isValidString(data.targetField, 0, 80)
+        && data.gradingScale in ['cgpa10', 'gpa4', 'percentage', '']
+        && isNullableNumber(data.maxScore, 0, 1000)
+        && isNullableNumber(data.minPassScore, 0, 1000)
+        && isNullableNumber(data.obtainedScore, 0, 1000)
+        && (data.degreeDuration == null || data.degreeDuration in [3, 4])
+        && isNullableNumber(data.ieltsScore, 0, 9)
+        && data.germanLevel in ['None', 'A1', 'A2', 'B1', 'B2', 'C1', '']
+        && isNullableNumber(data.backlogs, 0, 50)
+        && data.apsStatus in ['Not Started', 'Applied', 'Verified', '']
+        && data.shortlistedIds is list && data.shortlistedIds.size() <= 50
+        && (data.shortlistedIds.size() == 0 || isValidString(data.shortlistedIds[0], 1, 64))
+        && data.likedItemIds is list && data.likedItemIds.size() <= 100
+        && (data.likedItemIds.size() == 0 || isValidString(data.likedItemIds[0], 1, 80))
+        && data.checklistState is map && data.checklistState.keys().size() <= 40
+        && data.blockedAccount is map
+        && data.blockedAccount.keys().hasAll(['eurPerYear', 'eurToInrRate', 'bufferPercent', 'apsFeeInr', 'visaFeeInr'])
+        && data.blockedAccount.keys().hasOnly(['eurPerYear', 'eurToInrRate', 'bufferPercent', 'apsFeeInr', 'visaFeeInr'])
+        && isNullableNumber(data.blockedAccount.eurPerYear, 0, 200000)
+        && isNullableNumber(data.blockedAccount.eurToInrRate, 0, 1000)
+        && isNullableNumber(data.blockedAccount.bufferPercent, 0, 50)
+        && isNullableNumber(data.blockedAccount.apsFeeInr, 0, 200000)
+        && isNullableNumber(data.blockedAccount.visaFeeInr, 0, 200000)
+        && data.updatedAt == request.time;
+    }
+
+    function isValidInquiry(data) {
+      return data.keys().hasAll([
+          'userId',
+          'studentName',
+          'applicantRole',
+          'email',
+          'phone',
+          'destinationCountry',
+          'targetIntake',
+          'preferredCounselor',
+          'message',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId',
+          'studentName',
+          'applicantRole',
+          'email',
+          'phone',
+          'destinationCountry',
+          'targetIntake',
+          'preferredCounselor',
+          'message',
+          'createdAt'
+        ])
+        && (
+          (isSignedIn() && data.userId == request.auth.uid) ||
+          (!isSignedIn() && data.userId == '')
+        )
+        && isValidString(data.userId, 0, 128)
+        && isValidString(data.studentName, 2, 120)
+        && data.applicantRole in ['Student', 'Parent / Guardian', 'Both Attending']
+        && isValidString(data.email, 5, 160)
+        && isValidString(data.phone, 7, 32)
+        && data.destinationCountry in [
+          'Germany',
+          'France',
+          'Ireland',
+          'Netherlands',
+          'Austria',
+          'Multiple European Countries'
+        ]
+        && isValidString(data.targetIntake, 3, 60)
+        && data.preferredCounselor in [
+          'General Advisory (info@eurovidya.com)',
+          'Kumar Swamy (kumarswamy@eurovidya.com)',
+          'Sanjay (sanjay@eurovidya.com)'
+        ]
+        && isValidString(data.message, 0, 1500)
+        && data.createdAt == request.time;
+    }
+
+    match /users/{userId}/dossier/{docId} {
+      allow get: if isSignedIn() && isValidId(userId) && docId == 'main' && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && docId == 'main'
+        && request.auth.uid == userId
+        && isValidDossier(incoming(), userId);
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && docId == 'main'
+        && request.auth.uid == userId
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'studentName',
+          'email',
+          'targetDegree',
+          'targetField',
+          'gradingScale',
+          'maxScore',
+          'minPassScore',
+          'obtainedScore',
+          'degreeDuration',
+          'ieltsScore',
+          'germanLevel',
+          'backlogs',
+          'apsStatus',
+          'shortlistedIds',
+          'likedItemIds',
+          'checklistState',
+          'blockedAccount',
+          'updatedAt'
+        ])
+        && isValidDossier(incoming(), userId);
+      allow delete: if isSignedIn() && isValidId(userId) && docId == 'main' && request.auth.uid == userId;
+    }
+
+    match /inquiries/{inquiryId} {
+      allow get: if isSignedIn() && isValidId(inquiryId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isValidId(inquiryId) && isValidInquiry(incoming());
+      allow update, delete: if false;
+    }
+  }
+}
